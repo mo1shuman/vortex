@@ -65,7 +65,6 @@ class ImageRenderer : public Component {
     std::string Name = "ImageRenderer";
     SDL_Rect rect;
     std::string Path = "";
-    Vector2 scale;
     std::string getComponentName() const override {
         return "ImageRenderer"; // Return the component name
     }
@@ -99,19 +98,25 @@ public:
         object.components.push_back(component);
     }
     void RemoveComponent(GameObject& object, int componentID) {
-        auto iter = std::remove_if(object.components.begin(), object.components.end(), 
-            [componentID](Component* component) {
-                return component->setComponentID(componentID);
-            });
-        object.components.erase(iter, object.components.end());
+    // Iterate over the components vector
+    for (auto it = object.components.begin(); it != object.components.end(); ++it) {
+        // Check if the component's ID matches the specified componentID
+        if ((*it)->getComponentID() == componentID) {
+            // Remove the component
+            delete *it;
+            object.components.erase(it);
+            break; // Exit loop after removing the first matching component
+        }
     }
+}
 };
 
 std::vector<GameObject> LoadWorld(const std::string& Path, const bool& dev){
+    std::vector<GameObject> batch;
     std::ifstream worldFile(Path);
     if (!worldFile.is_open()) {
         std::cerr << "Error: Failed to open world file " << Path << std::endl;
-        return;
+        return batch;
     }
     std::string world_Raw((std::istreambuf_iterator<char>(worldFile)), std::istreambuf_iterator<char>());
     std::istringstream world_raw(world_Raw);
@@ -126,7 +131,7 @@ std::vector<GameObject> LoadWorld(const std::string& Path, const bool& dev){
         }
         else if (prefix == "obj") {
             iss >> obj.Name >> obj.id;
-            CurrentBatch.push_back(obj);
+            batch.push_back(obj);
         }
         else if (prefix == "com") {
             std::string name;
@@ -134,12 +139,13 @@ std::vector<GameObject> LoadWorld(const std::string& Path, const bool& dev){
             if (name == "RectRenderer") {
                 RectRenderer* rectRenderer = new RectRenderer;
                 iss >> rectRenderer->rect.x >> rectRenderer->rect.y >> rectRenderer->rect.w >> rectRenderer->rect.h >> rectRenderer->color.r >> rectRenderer->color.g >> rectRenderer->color.b >> rectRenderer->color.a;
-                GameObject prev_Obj = CurrentBatch.back();
+                GameObject prev_Obj = batch.back();
                 prev_Obj.components.push_back(rectRenderer);
             }
         }
     }
     worldFile.close();
+    return batch;
 };
 
 int main(int argc, char* argv[]) {
@@ -147,7 +153,7 @@ int main(int argc, char* argv[]) {
         SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
         return 1;
     }
-    if (TTF_Init() != -1) {
+    if (TTF_Init() == -1) {
         SDL_Log("Unable to initialize TTF: %s", TTF_GetError());
     }
     
@@ -214,16 +220,8 @@ int main(int argc, char* argv[]) {
                 } else if (componentName == "ImageRenderer") {
                     ImageRenderer* imageRenderer = dynamic_cast<ImageRenderer*>(component);
                     if (imageRenderer) {
-                        // Load the image
-                        SDL_Surface* surface = IMG_Load(imageRenderer->Path.c_str());
-                        if (!surface) {
-                            std::cerr << "Unable to load image: " << IMG_GetError() << std::endl;
-                            continue; // Skip rendering if image loading failed
-                        }
-
-                        // Create texture from surface
-                        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-                        SDL_FreeSurface(surface); // Free the surface after creating texture
+                       // Load the image
+                        SDL_Texture* texture = IMG_LoadTexture(renderer, imageRenderer->Path.c_str());
                         if (!texture) {
                             std::cerr << "Unable to create texture from surface: " << SDL_GetError() << std::endl;
                             continue; // Skip rendering if texture creation failed
@@ -231,13 +229,13 @@ int main(int argc, char* argv[]) {
 
                         // Set rendering parameters
                         SDL_Rect dstRect;
-                        dstRect.x = static_cast<int>(imageRenderer->rect.x * imageRenderer->scale.x);
-                        dstRect.y = static_cast<int>(imageRenderer->rect.y * imageRenderer->scale.y);
-                        dstRect.w = static_cast<int>(imageRenderer->rect.w * imageRenderer->scale.x);
-                        dstRect.h = static_cast<int>(imageRenderer->rect.h * imageRenderer->scale.y);
+                        dstRect.x = static_cast<int>(imageRenderer->rect.x);
+                        dstRect.y = static_cast<int>(imageRenderer->rect.y);
+                        dstRect.w = static_cast<int>(imageRenderer->rect.w);
+                        dstRect.h = static_cast<int>(imageRenderer->rect.h);
 
                         // Render texture
-                        SDL_RenderCopy(renderer, texture, nullptr, &dstRect);
+                        SDL_RenderCopy(renderer, texture, NULL, &dstRect);
                         SDL_DestroyTexture(texture);
                     }
                 }
@@ -273,10 +271,10 @@ int main(int argc, char* argv[]) {
 
                         // Set rendering parameters
                         SDL_Rect dstRect;
-                        dstRect.x = static_cast<int>(imageRenderer->rect.x * imageRenderer->scale.x);
-                        dstRect.y = static_cast<int>(imageRenderer->rect.y * imageRenderer->scale.y);
-                        dstRect.w = static_cast<int>(imageRenderer->rect.w * imageRenderer->scale.x);
-                        dstRect.h = static_cast<int>(imageRenderer->rect.h * imageRenderer->scale.y);
+                        dstRect.x = static_cast<int>(imageRenderer->rect.x);
+                        dstRect.y = static_cast<int>(imageRenderer->rect.y);
+                        dstRect.w = static_cast<int>(imageRenderer->rect.w);
+                        dstRect.h = static_cast<int>(imageRenderer->rect.h);
 
                         // Render texture
                         SDL_RenderCopy(renderer, texture, nullptr, &dstRect);
