@@ -1,0 +1,6 @@
+All Prefix:
+Prefix | (Stuff for stuff)
+Object Format:
+Name | id
+Component Formats:
+rect.x | rect.y | rect.w | rect.h | color.r | color.g | color.b | color.a;

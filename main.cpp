@@ -1,7 +1,10 @@
 #define SDL_MAIN_HANDLED
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <vector>
+#include <istream>
+#include <sstream>
 #include <algorithm>
 #include <SDL.h>
 #include <SDL_audio.h>
@@ -70,7 +73,7 @@ class ImageRenderer : public Component {
 
 struct GameObject {
     std::string Name;
-    int ID;
+    int id;
     std::vector<Component*> components;
     ~GameObject() {
         for (auto component : components) {
@@ -81,6 +84,63 @@ struct GameObject {
 
 std::vector<GameObject> CurrentBatch;
 std::vector<GameObject> UI_Batch;
+
+class Application {
+    void Quit() {
+        running = false;
+    }
+};
+
+class ObjectUtils {
+public:
+    void AddComponent(GameObject& object, Component* component) {
+        int id = object.components.size() + 1;
+        component->setComponentID(id);
+        object.components.push_back(component);
+    }
+    void RemoveComponent(GameObject& object, int componentID) {
+        auto iter = std::remove_if(object.components.begin(), object.components.end(), 
+            [componentID](Component* component) {
+                return component->setComponentID(componentID);
+            });
+        object.components.erase(iter, object.components.end());
+    }
+};
+
+std::vector<GameObject> LoadWorld(const std::string& Path, const bool& dev){
+    std::ifstream worldFile(Path);
+    if (!worldFile.is_open()) {
+        std::cerr << "Error: Failed to open world file " << Path << std::endl;
+        return;
+    }
+    std::string world_Raw((std::istreambuf_iterator<char>(worldFile)), std::istreambuf_iterator<char>());
+    std::istringstream world_raw(world_Raw);
+    std::string line;
+    while (getline(world_raw, line)) {
+        GameObject obj;
+        std::istringstream iss(line);
+        std::string prefix;
+        iss >> prefix;
+        if (prefix == "//") {
+            // Skip
+        }
+        else if (prefix == "obj") {
+            iss >> obj.Name >> obj.id;
+            CurrentBatch.push_back(obj);
+        }
+        else if (prefix == "com") {
+            std::string name;
+            iss >> name;
+            if (name == "RectRenderer") {
+                RectRenderer* rectRenderer = new RectRenderer;
+                iss >> rectRenderer->rect.x >> rectRenderer->rect.y >> rectRenderer->rect.w >> rectRenderer->rect.h >> rectRenderer->color.r >> rectRenderer->color.g >> rectRenderer->color.b >> rectRenderer->color.a;
+                GameObject prev_Obj = CurrentBatch.back();
+                prev_Obj.components.push_back(rectRenderer);
+            }
+        }
+    }
+    worldFile.close();
+};
 
 int main(int argc, char* argv[]) {
     if ((SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) != 0) {
@@ -234,25 +294,3 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-
-class Application {
-    void Quit() {
-        running = false;
-    }
-};
-
-class ObjectUtils {
-public:
-    void AddComponent(GameObject& object, Component* component) {
-        int id = object.components.size() + 1;
-        component->setComponentID(id);
-        object.components.push_back(component);
-    }
-    void RemoveComponent(GameObject& object, int componentID) {
-        auto iter = std::remove_if(object.components.begin(), object.components.end(), 
-            [componentID](Component* component) {
-                return component->setComponentID(componentID);
-            });
-        object.components.erase(iter, object.components.end());
-    }
-};
