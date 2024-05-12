@@ -13,6 +13,8 @@
 
 bool running = false;
 
+bool dev = false;
+
 struct World {
     std::string Name;
     std::string Path;
@@ -83,6 +85,30 @@ struct GameObject {
 
 std::vector<GameObject> CurrentBatch;
 std::vector<GameObject> UI_Batch;
+std::vector<World> worldBatch;
+
+void LoadQueue(const std::string& Path) {
+    std::ifstream mapFile(Path);
+    if (!mapFile.is_open()) {
+        std::cerr << "Error: Failed to open map file " << Path << std::endl;
+        return;
+    }
+    std::string map_Raw((std::istreambuf_iterator<char>(mapFile)), std::istreambuf_iterator<char>());
+    std::istringstream map_raw(map_Raw);
+    std::string line;
+    while (getline(map_raw, line)) {
+        World world;
+        std::istringstream iss(line);
+        std::string prefix;
+        iss >> prefix;
+        if (prefix == "//") {
+            // If line is comment, skip.
+        }
+        else {
+            iss >> world.Name >> world.Path >> world.Layer;
+        }
+    }
+}
 
 class Application {
     void Quit() {
@@ -93,7 +119,7 @@ class Application {
 class ObjectUtils {
 public:
     void AddComponent(GameObject& object, Component* component) {
-        int id = object.components.size() + 1;
+        int id = static_cast<int>(object.components.size()) + 1;
         component->setComponentID(id);
         object.components.push_back(component);
     }
@@ -111,7 +137,7 @@ public:
 }
 };
 
-std::vector<GameObject> LoadWorld(const std::string& Path, const bool& dev){
+std::vector<GameObject> LoadWorld(const std::string& Path){
     std::vector<GameObject> batch;
     std::ifstream worldFile(Path);
     if (!worldFile.is_open()) {
@@ -149,6 +175,13 @@ std::vector<GameObject> LoadWorld(const std::string& Path, const bool& dev){
 };
 
 int main(int argc, char* argv[]) {
+    std::vector<std::string> arguments(argv, argv + argc);
+    for (size_t i = 1; i < arguments.size(); ++i) { // Start from 1 to skip program name
+        if (arguments[i] == "--dev") {
+            dev = true;
+            break; // No need to continue searching once found
+        }
+    }
     if ((SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) != 0) {
         SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
         return 1;
@@ -156,7 +189,7 @@ int main(int argc, char* argv[]) {
     if (TTF_Init() == -1) {
         SDL_Log("Unable to initialize TTF: %s", TTF_GetError());
     }
-    
+
     // Create a window for main loop
     // [ - IMPORTANT CHANGE - ] Change name for engine by reading from a resource file
     SDL_Window* window = SDL_CreateWindow("Vortex Engine", 0, 0, 800, 600, SDL_WINDOW_FULLSCREEN_DESKTOP);
@@ -190,17 +223,18 @@ int main(int argc, char* argv[]) {
             if (event.type == SDL_KEYDOWN) {
                 switch (event.key.keysym.sym) {
                     default:
-                    break;
+                        break;
                 }
             }
         }
 
-        // Simulate Stuff
+        // Simulate Stuff in World
         for (const auto& obj : CurrentBatch) {
             for (auto component : obj.components) {
                 component->update();
             }
         }
+        // Simulate stuff for UI
         for (const auto& obj : UI_Batch) {
             for (auto component : obj.components) {
                 component->update();
@@ -281,7 +315,7 @@ int main(int argc, char* argv[]) {
                         SDL_DestroyTexture(texture);
                     }
                 }
-                
+
             }
         }
     }
