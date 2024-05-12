@@ -7,12 +7,8 @@
 #include <sstream>
 #include <algorithm>
 #include <SDL.h>
-#include <SDL_audio.h>
-#include <SDL_image.h>
-#include <SDL_ttf.h>
 
 bool running = false;
-
 bool dev = false;
 
 struct World {
@@ -21,60 +17,16 @@ struct World {
     int Layer = 0;
 };
 
+std::vector<World> worldBatch;
+
 class Component {
 public:
-    virtual ~Component() {}
-    virtual void update() = 0;
-    virtual std::string getComponentName() const = 0; // Virtual function to get the component name
-    int getComponentID() {
-        return COMPONENTID;
-    }
-    void setComponentID(int id) {
-        COMPONENTID = id;
-    }
-private:
-    int COMPONENTID;
-};
-
-struct Vector2 {
-    float x;
-    float y;
-    bool KeepAspect = false;
-};
-
-struct Color {
-    int r;
-    int g;
-    int b;
-    int a;
-};
-
-class RectRenderer : public Component {
-    public:
-    std::string Name = "RectRenderer";
-    SDL_Rect rect;
-    Color color;
-    std::string getComponentName() const override {
-        return "RectRenderer";
-    }
-    void update() override {
-        // Implement update logic
-    }
-};
-
-class ImageRenderer : public Component {
-    public:
-    std::string Name = "ImageRenderer";
-    SDL_Rect rect;
-    std::string Path = "";
-    std::string getComponentName() const override {
-        return "ImageRenderer"; // Return the component name
-    }
+    virtual void update(SDL_Renderer* renderer) = 0;
 };
 
 struct GameObject {
     std::string Name;
-    int id;
+    int id = 0;
     std::vector<Component*> components;
     ~GameObject() {
         for (auto component : components) {
@@ -82,17 +34,24 @@ struct GameObject {
         }
     }
 };
-
 std::vector<GameObject> CurrentBatch;
 std::vector<GameObject> UI_Batch;
-std::vector<World> worldBatch;
-
+// RectRenderer Class based on component class
+class RectRenderer : public Component {
+    public:
+    std::string Name = "RectRenderer";
+    SDL_Rect rect;
+    int r;
+    int g;
+    int b;
+    int a;
+    void update(SDL_Renderer* renderer) override {
+        SDL_SetRenderDrawColor(renderer, r, g, b, a);
+        SDL_RenderFillRect(renderer, &rect);
+    }
+};
 void LoadQueue(const std::string& Path) {
     std::ifstream mapFile(Path);
-    if (!mapFile.is_open()) {
-        std::cerr << "Error: Failed to open map file " << Path << std::endl;
-        return;
-    }
     std::string map_Raw((std::istreambuf_iterator<char>(mapFile)), std::istreambuf_iterator<char>());
     std::istringstream map_raw(map_Raw);
     std::string line;
@@ -106,223 +65,85 @@ void LoadQueue(const std::string& Path) {
         }
         else {
             iss >> world.Name >> world.Path >> world.Layer;
+            worldBatch.push_back(world);
+        }
+    }
+    mapFile.close();
+}
+void AddComponent(GameObject& object, Component* component) {
+    int id = static_cast<int>(object.components.size()) + 1;
+    object.components.push_back(component);
+    // Update the object in CurrentBatch
+    for (auto& obj : CurrentBatch) {
+        if (obj.id == object.id) {
+            obj = object;
+            break; // Exit loop after updating the object
         }
     }
 }
-
-class Application {
-    void Quit() {
-        running = false;
-    }
-};
-
-class ObjectUtils {
-public:
-    void AddComponent(GameObject& object, Component* component) {
-        int id = static_cast<int>(object.components.size()) + 1;
-        component->setComponentID(id);
-        object.components.push_back(component);
-    }
-    void RemoveComponent(GameObject& object, int componentID) {
-    // Iterate over the components vector
-    for (auto it = object.components.begin(); it != object.components.end(); ++it) {
-        // Check if the component's ID matches the specified componentID
-        if ((*it)->getComponentID() == componentID) {
-            // Remove the component
-            delete *it;
-            object.components.erase(it);
-            break; // Exit loop after removing the first matching component
-        }
-    }
-}
-};
-
-std::vector<GameObject> LoadWorld(const std::string& Path){
+void LoadWorld(const World world) {
     std::vector<GameObject> batch;
+    std::string Path = world.Path;
     std::ifstream worldFile(Path);
-    if (!worldFile.is_open()) {
-        std::cerr << "Error: Failed to open world file " << Path << std::endl;
-        return batch;
-    }
     std::string world_Raw((std::istreambuf_iterator<char>(worldFile)), std::istreambuf_iterator<char>());
     std::istringstream world_raw(world_Raw);
     std::string line;
+    std::string prefix;
     while (getline(world_raw, line)) {
         GameObject obj;
         std::istringstream iss(line);
-        std::string prefix;
         iss >> prefix;
-        if (prefix == "//") {
-            // Skip
-        }
-        else if (prefix == "obj") {
+        if (prefix == "obj") {
             iss >> obj.Name >> obj.id;
-            batch.push_back(obj);
+            if (world.Layer == 0) UI_Batch.push_back(obj);
+            if (world.Layer == 2) CurrentBatch.push_back(obj);
         }
-        else if (prefix == "com") {
+        if (prefix == "com") {
             std::string name;
             iss >> name;
             if (name == "RectRenderer") {
                 RectRenderer* rectRenderer = new RectRenderer;
-                iss >> rectRenderer->rect.x >> rectRenderer->rect.y >> rectRenderer->rect.w >> rectRenderer->rect.h >> rectRenderer->color.r >> rectRenderer->color.g >> rectRenderer->color.b >> rectRenderer->color.a;
-                GameObject prev_Obj = batch.back();
-                prev_Obj.components.push_back(rectRenderer);
+                iss >> rectRenderer->rect.x >> rectRenderer->rect.y >> rectRenderer->rect.w >> rectRenderer->rect.h
+                >> rectRenderer->r >> rectRenderer->g >> rectRenderer->b >> rectRenderer->a;
+                GameObject prev_Obj;
+                if (world.Layer == 0) prev_Obj = UI_Batch.back();
+                if (world.Layer == 2) prev_Obj = CurrentBatch.back();
+                AddComponent(prev_Obj, rectRenderer);
             }
         }
     }
     worldFile.close();
-    return batch;
-};
+    return;
+}
 
 int main(int argc, char* argv[]) {
-    std::vector<std::string> arguments(argv, argv + argc);
-    for (size_t i = 1; i < arguments.size(); ++i) { // Start from 1 to skip program name
-        if (arguments[i] == "--dev") {
-            dev = true;
-            break; // No need to continue searching once found
-        }
-    }
-    if ((SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) != 0) {
-        SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
-        return 1;
-    }
-    if (TTF_Init() == -1) {
-        SDL_Log("Unable to initialize TTF: %s", TTF_GetError());
-    }
-
-    // Create a window for main loop
-    // [ - IMPORTANT CHANGE - ] Change name for engine by reading from a resource file
-    SDL_Window* window = SDL_CreateWindow("Vortex Engine", 0, 0, 800, 600, SDL_WINDOW_FULLSCREEN_DESKTOP);
-    if (!window) {
-        SDL_Log("Unable to create window: %s", SDL_GetError());
-        SDL_Quit();
-        return 1;
-    }
-
-    // Create a renderer
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window* window = SDL_CreateWindow("Vortex", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1900, 1080, SDL_WINDOW_FULLSCREEN); // Create a window
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (!renderer) {
-        SDL_Log("Unable to create renderer: %s", SDL_GetError());
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
-    }
-
     running = true;
-
-    // Create an SDL Event
+    LoadQueue("resources.map");
+    World CurrentWorld = worldBatch.front();
+    LoadWorld(CurrentWorld);
     SDL_Event event;
-
+    running = true;
+    std::cout << "Starting main loop";
     while (running) {
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                running = false;
-            }
-
-            // Key Input
-            if (event.type == SDL_KEYDOWN) {
-                switch (event.key.keysym.sym) {
-                    default:
-                        break;
-                }
-            }
-        }
-
-        // Simulate Stuff in World
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
         for (const auto& obj : CurrentBatch) {
-            for (auto component : obj.components) {
-                component->update();
+            for (const auto& component : obj.components) {
+                component->update(renderer);
             }
         }
-        // Simulate stuff for UI
         for (const auto& obj : UI_Batch) {
-            for (auto component : obj.components) {
-                component->update();
+            for (const auto& component : obj.components) {
+                component->update(renderer);
             }
         }
-
-        // Render stuff for CurrentBatch (Layer 2)
-        for (const auto& obj : CurrentBatch) {
-            for (auto component : obj.components) {
-                std::string componentName = component->getComponentName();
-                if (componentName == "RectRenderer") {
-                    RectRenderer* rectRenderer = dynamic_cast<RectRenderer*>(component);
-                    if (rectRenderer) {
-                        SDL_SetRenderDrawColor(renderer, rectRenderer->color.r, rectRenderer->color.g, rectRenderer->color.b, rectRenderer->color.a);
-                        SDL_RenderFillRect(renderer, &rectRenderer->rect);
-                    }
-                } else if (componentName == "ImageRenderer") {
-                    ImageRenderer* imageRenderer = dynamic_cast<ImageRenderer*>(component);
-                    if (imageRenderer) {
-                       // Load the image
-                        SDL_Texture* texture = IMG_LoadTexture(renderer, imageRenderer->Path.c_str());
-                        if (!texture) {
-                            std::cerr << "Unable to create texture from surface: " << SDL_GetError() << std::endl;
-                            continue; // Skip rendering if texture creation failed
-                        }
-
-                        // Set rendering parameters
-                        SDL_Rect dstRect;
-                        dstRect.x = static_cast<int>(imageRenderer->rect.x);
-                        dstRect.y = static_cast<int>(imageRenderer->rect.y);
-                        dstRect.w = static_cast<int>(imageRenderer->rect.w);
-                        dstRect.h = static_cast<int>(imageRenderer->rect.h);
-
-                        // Render texture
-                        SDL_RenderCopy(renderer, texture, NULL, &dstRect);
-                        SDL_DestroyTexture(texture);
-                    }
-                }
-            }
-        }
-        // Render stuff for UI_Batch (Layer 0, top layer)
-        for (const auto& obj : UI_Batch) {
-            for (auto component : obj.components) {
-                std::string componentName = component->getComponentName();
-                if (componentName == "RectRenderer") {
-                    RectRenderer* rectRenderer = dynamic_cast<RectRenderer*>(component);
-                    if (rectRenderer) {
-                        SDL_SetRenderDrawColor(renderer, rectRenderer->color.r, rectRenderer->color.g, rectRenderer->color.b, rectRenderer->color.a);
-                        SDL_RenderFillRect(renderer, &rectRenderer->rect);
-                    }
-                } else if (componentName == "ImageRenderer") {
-                    ImageRenderer* imageRenderer = dynamic_cast<ImageRenderer*>(component);
-                    if (imageRenderer) {
-                        // Load the image
-                        SDL_Surface* surface = IMG_Load(imageRenderer->Path.c_str());
-                        if (!surface) {
-                            std::cerr << "Unable to load image: " << IMG_GetError() << std::endl;
-                            continue; // Skip rendering if image loading failed
-                        }
-
-                        // Create texture from surface
-                        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-                        SDL_FreeSurface(surface); // Free the surface after creating texture
-                        if (!texture) {
-                            std::cerr << "Unable to create texture from surface: " << SDL_GetError() << std::endl;
-                            continue; // Skip rendering if texture creation failed
-                        }
-
-                        // Set rendering parameters
-                        SDL_Rect dstRect;
-                        dstRect.x = static_cast<int>(imageRenderer->rect.x);
-                        dstRect.y = static_cast<int>(imageRenderer->rect.y);
-                        dstRect.w = static_cast<int>(imageRenderer->rect.w);
-                        dstRect.h = static_cast<int>(imageRenderer->rect.h);
-
-                        // Render texture
-                        SDL_RenderCopy(renderer, texture, nullptr, &dstRect);
-                        SDL_DestroyTexture(texture);
-                    }
-                }
-
-            }
-        }
+        SDL_RenderPresent(renderer);
     }
-
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
-
     return 0;
 }
