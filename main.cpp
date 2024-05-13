@@ -7,24 +7,26 @@
 #include <sstream>
 #include <SDL.h>
 
+// Structure for handling scenes.
+// Contains: Path (string)
+// Is used as a reference to a scene file.
+// Does not contain objects for memory's sake.
 struct Scene {
     std::string Path;
 };
 
+// Component structure.
+// Contains: Virtual update template (void)
 struct Component {
     virtual void update(SDL_Renderer* renderer) = 0;
 };
 
+// Object structure.
+// Contains: id (int), component vector (pointers)
 struct Object {
     int id;
     std::vector<Component*> components;
 };
-
-std::vector<Object> Render_Batch;
-std::vector<Scene> SceneBatch;
-
-std::string line;
-std::string prefix;
 
 struct Rect_Render : Component {
     SDL_Rect rect;
@@ -36,7 +38,18 @@ struct Rect_Render : Component {
         SDL_RenderFillRect(renderer, &rect);
     }
 };
-void Load_Queue(const std::string& Path) {
+// Render batch, used for rendering Level 2 (Game Scene)
+std::vector<Object> batch;
+
+// Scene batch, used for containing scene paths.
+std::vector<Scene> scene_batch;
+
+/* This is stuff for istringstream dummies in Load_Queue and Load_Scene */
+std::string line;
+std::string prefix;
+
+// Loads the map. Reads from resources.map in the root directory to extract paths to scenes.
+void load_queue(const std::string& Path) {
     Scene Scene;
     std::ifstream map_file(Path);
     std::string map_raw((std::istreambuf_iterator<char>(map_file)), std::istreambuf_iterator<char>());
@@ -47,13 +60,14 @@ void Load_Queue(const std::string& Path) {
         if (prefix == "//") { continue; }
         else {
         iss >> Scene.Path;
-        SceneBatch.push_back(Scene);
+        scene_batch.push_back(Scene);
         }
     }
     map_file.close();
 }
 
-void Load_Scene(const Scene& Scene) {
+// Loads scenes. Add component data extraction methods if necessary
+void load_scene(const Scene& Scene) {
     std::ifstream scene_file(Scene.Path);
     std::string scene_Raw((std::istreambuf_iterator<char>(scene_file)), std::istreambuf_iterator<char>());
     std::istringstream scene_iss(scene_Raw);
@@ -63,16 +77,17 @@ void Load_Scene(const Scene& Scene) {
         iss >> prefix;
         if (prefix == "obj") {
             iss >> obj.id;
-            Render_Batch.push_back(obj);
+            batch.push_back(obj);
         }
         if (prefix == "com") {
             std::string name;
             iss >> name;
-            Object& prev_Obj = Render_Batch.back(); // Get a reference to the last added object
+            // Gets the latest object added to the batch.
+            Object& prev_obj = batch.back();
             if (name == "Rect_Render") {
                 Rect_Render* rect_Render = new Rect_Render;
                 iss >> rect_Render->rect.x >> rect_Render->rect.y >> rect_Render->rect.w >> rect_Render->rect.h >> rect_Render->r >> rect_Render->g >> rect_Render->b;
-                prev_Obj.components.push_back(rect_Render); // Add the component to the object
+                prev_obj.components.push_back(rect_Render);
             }
         }
     }
@@ -83,10 +98,10 @@ void Load_Scene(const Scene& Scene) {
 // Main Function optimization needed when render issue is fixed.
 int main() {
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window* window = SDL_CreateWindow("Vortex", 0, 0, 800, 600, SDL_WINDOW_FULLSCREEN_DESKTOP); // Create a window
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    Load_Queue("resources.map");
-    Load_Scene(SceneBatch[0]);
+    SDL_Window* window = SDL_CreateWindow("Vortex", 0, 0, 1920, 1080, SDL_WINDOW_FULLSCREEN); // Create a window
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    load_queue("resources.map");
+    load_scene(scene_batch[0]);
     SDL_Event event;
     bool running = true;
     while (running) {
@@ -97,12 +112,13 @@ int main() {
         }
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
-        for (const auto& obj : Render_Batch) {
-            for (const auto& component : obj.components) {
+        for (const auto obj : batch) {
+            for (const auto component : obj.components) {
                 component->update(renderer);
             }
         }
         SDL_RenderPresent(renderer);
+        SDL_Delay(12);
     }
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
