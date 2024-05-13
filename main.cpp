@@ -1,5 +1,3 @@
-#include "SDL_render.h"
-#include "SDL_video.h"
 #define SDL_MAIN_HANDLED
 #include <string>
 #include <iostream>
@@ -19,7 +17,6 @@ struct Component {
 };
 
 struct Object {
-    std::string Name;
     int id;
     std::vector<Component*> components;
 };
@@ -30,7 +27,7 @@ std::vector<Scene> SceneBatch;
 std::string line;
 std::string prefix;
 
-struct Rect_Render : public Component {
+struct Rect_Render : Component {
     SDL_Rect rect;
     int r;
     int g;
@@ -65,7 +62,7 @@ void Load_Scene(const Scene Scene) {
         std::istringstream iss(line);
         iss >> prefix;
         if (prefix == "obj") {
-            iss >> obj.Name >> obj.id;
+            iss >> obj.id;
             Render_Batch.push_back(obj);
         }
         if (prefix == "com") {
@@ -82,13 +79,14 @@ void Load_Scene(const Scene Scene) {
     scene_file.close();
 }
 
+
+// Main Function optimization needed when render issue is fixed.
 int main() {
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* window = SDL_CreateWindow("Vortex", 0, 0, 800, 600, SDL_WINDOW_FULLSCREEN_DESKTOP); // Create a window
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     Load_Queue("resources.map");
     Load_Scene(SceneBatch[0]);
-    SDL_Event event;
     while (true) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
