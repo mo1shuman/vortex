@@ -32,9 +32,8 @@ struct Rect_Render : Component {
     int r;
     int g;
     int b;
-    int a;
     void update(SDL_Renderer* renderer) {
-        SDL_SetRenderDrawColor(renderer, r, g, b, a);
+        SDL_SetRenderDrawColor(renderer, r, g, b, 255);
         SDL_RenderFillRect(renderer, &rect);
     }
 };
@@ -72,7 +71,7 @@ void Load_Scene(const Scene Scene) {
             prev_Obj = Render_Batch.back();
             if (name == "Rect_Render") {
                 Rect_Render* rect_Render = new Rect_Render;
-                iss >> rect_Render->rect.x >> rect_Render->rect.y >> rect_Render->rect.w >> rect_Render->rect.h >> rect_Render->r >> rect_Render->g >> rect_Render->b >> rect_Render->a;
+                iss >> rect_Render->rect.x >> rect_Render->rect.y >> rect_Render->rect.w >> rect_Render->rect.h >> rect_Render->r >> rect_Render->g >> rect_Render->b;
             }
         }
     }
