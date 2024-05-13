@@ -8,7 +8,6 @@
 #include <SDL.h>
 
 struct Scene {
-    std::string Name;
     std::string Path;
 };
 
@@ -47,7 +46,7 @@ void Load_Queue(const std::string& Path) {
         iss >> prefix;
         if (prefix == "//") { continue; }
         else {
-        iss >> Scene.Name >> Scene.Path;
+        iss >> Scene.Path;
         SceneBatch.push_back(Scene);
         }
     }
