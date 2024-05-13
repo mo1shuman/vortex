@@ -68,11 +68,11 @@ void Load_Scene(const Scene Scene) {
         if (prefix == "com") {
             std::string name;
             iss >> name;
-            Object prev_Obj;
-            prev_Obj = Render_Batch.back();
+            Object& prev_Obj = Render_Batch.back(); // Get a reference to the last added object
             if (name == "Rect_Render") {
                 Rect_Render* rect_Render = new Rect_Render;
                 iss >> rect_Render->rect.x >> rect_Render->rect.y >> rect_Render->rect.w >> rect_Render->rect.h >> rect_Render->r >> rect_Render->g >> rect_Render->b;
+                prev_Obj.components.push_back(rect_Render); // Add the component to the object
             }
         }
     }
@@ -87,7 +87,14 @@ int main() {
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     Load_Queue("resources.map");
     Load_Scene(SceneBatch[0]);
-    while (true) {
+    SDL_Event event;
+    bool running = true;
+    while (running) {
+        while (SDL_PollEvent(&event)){
+            if (event.type == SDL_QUIT) {
+                running = false;
+            }
+        }
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
         for (const auto& obj : Render_Batch) {
