@@ -1,3 +1,5 @@
+#include "SDL_render.h"
+#include "SDL_video.h"
 #define SDL_MAIN_HANDLED
 #include <string>
 #include <iostream>
@@ -5,137 +7,92 @@
 #include <vector>
 #include <istream>
 #include <sstream>
-#include <algorithm>
 #include <SDL.h>
 
-bool running = false;
-bool dev = false;
-
-struct World {
+struct Scene {
     std::string Name;
     std::string Path;
-    int Layer = 0;
 };
 
-std::vector<World> worldBatch;
-
-class Component {
-public:
+struct Component {
     virtual void update(SDL_Renderer* renderer) = 0;
 };
 
-struct GameObject {
+struct Object {
     std::string Name;
-    int id = 0;
+    int id;
     std::vector<Component*> components;
-    ~GameObject() {
-        for (auto component : components) {
-            delete component;
-        }
-    }
 };
-std::vector<GameObject> CurrentBatch;
-std::vector<GameObject> UI_Batch;
-// RectRenderer Class based on component class
-class RectRenderer : public Component {
-    public:
-    std::string Name = "RectRenderer";
+
+std::vector<Object> Render_Batch;
+std::vector<Scene> SceneBatch;
+
+std::string line;
+std::string prefix;
+
+struct Rect_Render : public Component {
     SDL_Rect rect;
     int r;
     int g;
     int b;
     int a;
-    void update(SDL_Renderer* renderer) override {
+    void update(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, r, g, b, a);
         SDL_RenderFillRect(renderer, &rect);
     }
 };
-void LoadQueue(const std::string& Path) {
-    std::ifstream mapFile(Path);
-    std::string map_Raw((std::istreambuf_iterator<char>(mapFile)), std::istreambuf_iterator<char>());
-    std::istringstream map_raw(map_Raw);
-    std::string line;
-    while (getline(map_raw, line)) {
-        World world;
+void Load_Queue(const std::string& Path) {
+    Scene Scene;
+    std::ifstream map_file(Path);
+    std::string map_raw((std::istreambuf_iterator<char>(map_file)), std::istreambuf_iterator<char>());
+    std::istringstream map_iss(map_raw);
+    while (getline(map_iss, line)) {
         std::istringstream iss(line);
-        std::string prefix;
         iss >> prefix;
-        if (prefix == "//") {
-            // If line is comment, skip.
-        }
-        else {
-            iss >> world.Name >> world.Path >> world.Layer;
-            worldBatch.push_back(world);
-        }
+        if (prefix == "//") { continue; }
+        iss >> Scene.Name >> Scene.Path;
+        SceneBatch.push_back(Scene);
     }
-    mapFile.close();
+    map_file.close();
 }
-void AddComponent(GameObject& object, Component* component) {
-    int id = static_cast<int>(object.components.size()) + 1;
-    object.components.push_back(component);
-    // Update the object in CurrentBatch
-    for (auto& obj : CurrentBatch) {
-        if (obj.id == object.id) {
-            obj = object;
-            break; // Exit loop after updating the object
-        }
-    }
-}
-void LoadWorld(const World world) {
-    std::vector<GameObject> batch;
-    std::string Path = world.Path;
-    std::ifstream worldFile(Path);
-    std::string world_Raw((std::istreambuf_iterator<char>(worldFile)), std::istreambuf_iterator<char>());
-    std::istringstream world_raw(world_Raw);
-    std::string line;
-    std::string prefix;
-    while (getline(world_raw, line)) {
-        GameObject obj;
+
+void Load_Scene(const Scene Scene) {
+    std::ifstream scene_file(Scene.Path);
+    std::string scene_Raw((std::istreambuf_iterator<char>(scene_file)), std::istreambuf_iterator<char>());
+    std::istringstream scene_iss(scene_Raw);
+    while (getline(scene_iss, line)) {
+        Object obj;
         std::istringstream iss(line);
         iss >> prefix;
         if (prefix == "obj") {
             iss >> obj.Name >> obj.id;
-            if (world.Layer == 0) UI_Batch.push_back(obj);
-            if (world.Layer == 2) CurrentBatch.push_back(obj);
+            Render_Batch.push_back(obj);
         }
         if (prefix == "com") {
             std::string name;
             iss >> name;
-            if (name == "RectRenderer") {
-                RectRenderer* rectRenderer = new RectRenderer;
-                iss >> rectRenderer->rect.x >> rectRenderer->rect.y >> rectRenderer->rect.w >> rectRenderer->rect.h
-                >> rectRenderer->r >> rectRenderer->g >> rectRenderer->b >> rectRenderer->a;
-                GameObject prev_Obj;
-                if (world.Layer == 0) prev_Obj = UI_Batch.back();
-                if (world.Layer == 2) prev_Obj = CurrentBatch.back();
-                AddComponent(prev_Obj, rectRenderer);
+            Object prev_Obj;
+            prev_Obj = Render_Batch.back();
+            if (name == "Rect_Render") {
+                Rect_Render* rect_Render = new Rect_Render;
+                iss >> rect_Render->rect.x >> rect_Render->rect.y >> rect_Render->rect.w >> rect_Render->rect.h >> rect_Render->r >> rect_Render->g >> rect_Render->b >> rect_Render->a;
             }
         }
     }
-    worldFile.close();
-    return;
+    scene_file.close();
 }
 
-int main(int argc, char* argv[]) {
+int main() {
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window* window = SDL_CreateWindow("Vortex", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1900, 1080, SDL_WINDOW_FULLSCREEN); // Create a window
+    SDL_Window* window = SDL_CreateWindow("Vortex", 0, 0, 800, 600, SDL_WINDOW_FULLSCREEN_DESKTOP); // Create a window
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    running = true;
-    LoadQueue("resources.map");
-    World CurrentWorld = worldBatch.front();
-    LoadWorld(CurrentWorld);
+    Load_Queue("resources.map");
+    Load_Scene(SceneBatch[0]);
     SDL_Event event;
-    running = true;
-    std::cout << "Starting main loop";
-    while (running) {
+    while (true) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
-        for (const auto& obj : CurrentBatch) {
-            for (const auto& component : obj.components) {
-                component->update(renderer);
-            }
-        }
-        for (const auto& obj : UI_Batch) {
+        for (const auto& obj : Render_Batch) {
             for (const auto& component : obj.components) {
                 component->update(renderer);
             }
