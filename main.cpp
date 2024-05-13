@@ -46,8 +46,10 @@ void Load_Queue(const std::string& Path) {
         std::istringstream iss(line);
         iss >> prefix;
         if (prefix == "//") { continue; }
+        else {
         iss >> Scene.Name >> Scene.Path;
         SceneBatch.push_back(Scene);
+        }
     }
     map_file.close();
 }
