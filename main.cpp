@@ -6,57 +6,20 @@
 #include <istream>
 #include <sstream>
 #include <SDL.h>
+#include "components.h"
+#include "base.h"
 
-int moveSpeed = 2;
 bool dev = false;
-bool moveLeft = false;
-bool moveRight = false;
-
-struct Scene {
-
-    // Path to a Scene
-    std::string Path;
-
-    // Layer Number
-    int layer;
-};
-
-struct Component {
-    virtual void update(SDL_Renderer* renderer) = 0;
-};
-
-struct Object {
-    int id;
-    std::vector<Component*> components;
-};
-
-std::vector<Object> batch0;
-std::vector<Object> batch2;
-std::vector<Scene> scene_batch;
 
 std::string line;
 std::string prefix;
 
-struct Rect_Render : Component {
-    SDL_Rect rect;
-    int r;
-    int g;
-    int b;
-    int a;
-    int Inherited_Layer;
-    void update(SDL_Renderer* renderer) {
-        if (Inherited_Layer != 0){
-            if (moveLeft == true) {
-                rect.x = rect.x + moveSpeed;
-            }
-            if (moveRight == true) {
-                rect.x = rect.x - moveSpeed;
-            }
-        }
-        SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-        SDL_RenderFillRect(renderer, &rect);
-    }
-};
+
+std::vector<Object> batch0;
+std::vector<Object> batch1;
+std::vector<Object> batch2;
+std::vector<Scene> scene_batch;
+
 
 void load_queue(const std::string& Path) {
     Scene Scene;
@@ -90,12 +53,15 @@ void load_scene(const Scene& Scene) {
             iss >> obj.id;
             if (dev) std::cout << "Added object with id: " << obj.id << " from scene " << Scene.Path << "\nWill be added to layer: "<< Scene.layer << std::endl;
             if (Scene.layer == 0) batch0.push_back(obj);
+            if (Scene.layer == 1) batch1.push_back(obj);
             if (Scene.layer == 2) batch2.push_back(obj);
         }
         if (prefix == "com") {
             std::string name;
             iss >> std::ws >> name;
             if (dev) std::cout << "Added component " << name << " to previously loaded object at scene " << Scene.Path << std::endl;
+
+            // For Rect_Render
             if (name == "Rect_Render") {
                 if (dev) std::cout << "Adding Rect Render" << std::endl;
                 Rect_Render* rect_Render = new Rect_Render;
@@ -105,11 +71,19 @@ void load_scene(const Scene& Scene) {
                     Object& prev_obj = batch0.back();
                     prev_obj.components.push_back(rect_Render);
                 }
+                if (Scene.layer == 1) {
+                    Object& prev_obj = batch1.back();
+                    prev_obj.components.push_back(rect_Render);
+                }
                 if (Scene.layer == 2) {
                     Object& prev_obj = batch2.back();
                     prev_obj.components.push_back(rect_Render);
                 }
                 if (dev) std::cout << "Rect Render added." << std::endl;
+            }
+            if (name == "Load_Scene") {
+                if (dev) std::cout << "Adding Load_Scene" << std::endl;
+                LoadScene* load_Scene = new LoadScene;
             }
         }
     }
@@ -134,8 +108,8 @@ int main(int argc, char* argv[]) {
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     load_queue("resources.map");
     load_scene(scene_batch[0]);
-    load_scene(scene_batch[1]);
     if (dev) std::cout << "Size of batch2: " << batch2.size() << std::endl;
+    if (dev) std::cout << "Size of batch0: " << batch1.size() << std::endl;
     if (dev) std::cout << "Size of batch0: " << batch0.size() << std::endl;
     if (dev) std::cout << "Size of scene_batch: " << scene_batch.size() << std::endl;
     SDL_Event event;
@@ -145,18 +119,28 @@ int main(int argc, char* argv[]) {
             if (event.type == SDL_QUIT) {
                 running = false;
             }
+            // OnKeyDown
             if (event.type == SDL_KEYDOWN) {
                 switch (event.key.keysym.sym) {
+                case SDLK_ESCAPE:
+                    running = false;
                 case SDLK_a:
                     moveLeft = true;
                     break;
                 case SDLK_d:
                     moveRight = true;
                     break;
+                case SDLK_w:
+                    moveUp = true;
+                    break;
+                case SDLK_s:
+                    moveDown = true;
+                    break;
                 default:
                     break;
                 }
             }
+            // OnKeyUp
             if (event.type == SDL_KEYUP) {
                 switch (event.key.keysym.sym) {
                     case SDLK_a:
@@ -164,6 +148,12 @@ int main(int argc, char* argv[]) {
                         break;
                     case SDLK_d:
                         moveRight = false;
+                        break;
+                    case SDLK_w:
+                        moveUp = false;
+                        break;
+                    case SDLK_s:
+                        moveDown = false;
                         break;
                     default:
                         break;
@@ -179,6 +169,12 @@ int main(int argc, char* argv[]) {
             }
         }
         for (const auto& obj : batch0) {
+            if (obj.components.empty()) std::cout << "Components of " << obj.id << " is empty, skipping." << std::endl;
+            for (const auto& component : obj.components) {
+                component->update(renderer);
+            }
+        }
+        for (const auto& obj : batch1) {
             if (obj.components.empty()) std::cout << "Components of " << obj.id << " is empty, skipping." << std::endl;
             for (const auto& component : obj.components) {
                 component->update(renderer);
