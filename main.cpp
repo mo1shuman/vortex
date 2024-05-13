@@ -53,7 +53,7 @@ void Load_Queue(const std::string& Path) {
     map_file.close();
 }
 
-void Load_Scene(const Scene Scene) {
+void Load_Scene(const Scene& Scene) {
     std::ifstream scene_file(Scene.Path);
     std::string scene_Raw((std::istreambuf_iterator<char>(scene_file)), std::istreambuf_iterator<char>());
     std::istringstream scene_iss(scene_Raw);
