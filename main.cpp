@@ -6,7 +6,6 @@
 #include <istream>
 #include <sstream>
 #include <SDL.h>
-#include "components.h"
 #include "base.h"
 
 bool dev = false;
@@ -14,11 +13,44 @@ bool dev = false;
 std::string line;
 std::string prefix;
 
+int moveSpeed = 2;
+int verticalSpeed = 1;
+bool moveLeft = false;
+bool moveRight = false;
+bool moveUp = false;
+bool moveDown = false;
 
 std::vector<Object> batch0;
 std::vector<Object> batch1;
 std::vector<Object> batch2;
 std::vector<Scene> scene_batch;
+
+struct Rect_Render : Component {
+    SDL_Rect rect;
+    int r;
+    int g;
+    int b;
+    int a;
+    int Inherited_Layer;
+    void update(SDL_Renderer* renderer) {
+        if (Inherited_Layer != 0){
+            if (moveLeft == true) {
+                rect.x = rect.x + moveSpeed;
+            }
+            if (moveRight == true) {
+                rect.x = rect.x - moveSpeed;
+            }
+            if (moveUp == true) {
+                rect.y = rect.y + verticalSpeed;
+            }
+            if (moveDown == true) {
+                rect.y = rect.y - verticalSpeed;
+            }
+        }
+        SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+        SDL_RenderFillRect(renderer, &rect);
+    }
+};
 
 
 void load_queue(const std::string& Path) {
